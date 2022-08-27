@@ -1,39 +1,143 @@
-import styles from '../../styles/Home.module.css'
+import { Fragment, useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { getFilteredEvents } from '../../dummy-data'
+import useSWR from 'swr'
+
 import EventList from '../../components/events/EventList'
-export default function FillteredEventPage() {
+import ResultsTitle from '../../components/events/results-title'
+import Button from '../../components/ui/button'
+import ErrorAlert from '../../components/ui/error-alert'
+
+function FilteredEventsPage() {
+  const [loadedEvents, setLoadedEvents] = useState()
   const router = useRouter()
-  const filterDate = router.query.slug
-  if (!filterDate) {
-    return <p className="m-0">loding...</p>
+
+  const filterData = router.query.slug
+
+  const { data, error } = useSWR('http://localhost:5000/events')
+
+  useEffect(() => {
+    if (data) {
+      const events = []
+
+      for (const key in data) {
+        events.push({
+          id: key,
+          ...data[key],
+        })
+      }
+
+      setLoadedEvents(events)
+    }
+  }, [data])
+
+  if (!loadedEvents) {
+    return (
+      <Fragment>
+        <p className="center">Loading...</p>
+      </Fragment>
+    )
   }
-  const numYear = +filterDate[0]
-  const numMonth = +filterDate[1]
+
+  const filteredYear = filterData[0]
+  const filteredMonth = filterData[1]
+
+  const numYear = +filteredYear
+  const numMonth = +filteredMonth
+
   if (
-    isNaN(numMonth) ||
     isNaN(numYear) ||
+    isNaN(numMonth) ||
+    numYear > 2030 ||
+    numYear < 2021 ||
     numMonth < 1 ||
     numMonth > 12 ||
-    numYear < 2021
+    error
   ) {
     return (
-      <p className="text-center font-bold text-2xl text-red-600 mt-10">
-        invalid filter
-      </p>
+      <Fragment>
+        <ErrorAlert>
+          <p>Invalid filter. Please adjust your values!</p>
+        </ErrorAlert>
+        <div className="center">
+          <Button link="/events">Show All Events</Button>
+        </div>
+      </Fragment>
     )
   }
-  const filterdEvents = getFilteredEvents({ year: numYear, month: numMonth })
-  if (!filterdEvents || filterdEvents.length === 0) {
+
+  const filteredEvents = loadedEvents.filter((event) => {
+    const eventDate = new Date(event.date)
     return (
-      <p className="text-center font-bold text-2xl text-red-600 mt-10">
-        No event found for this filter!
-      </p>
+      eventDate.getFullYear() === numYear &&
+      eventDate.getMonth() === numMonth - 1
+    )
+  })
+
+  if (!filteredEvents || filteredEvents.length === 0) {
+    return (
+      <Fragment>
+        <ErrorAlert>
+          <p>No events found for the chosen filter!</p>
+        </ErrorAlert>
+        <div className="center">
+          <Button link="/events">Show All Events</Button>
+        </div>
+      </Fragment>
     )
   }
+
+  const date = new Date(numYear, numMonth - 1)
+
   return (
-    <div className={styles.container}>
-      <EventList item={filterdEvents} />
-    </div>
+    <Fragment>
+      <ResultsTitle date={date} />
+      <EventList items={filteredEvents} />
+    </Fragment>
   )
 }
+
+// export async function getServerSideProps(context) {
+//   const { params } = context;
+
+//   const filterData = params.slug;
+
+//   const filteredYear = filterData[0];
+//   const filteredMonth = filterData[1];
+
+//   const numYear = +filteredYear;
+//   const numMonth = +filteredMonth;
+
+//   if (
+//     isNaN(numYear) ||
+//     isNaN(numMonth) ||
+//     numYear > 2030 ||
+//     numYear < 2021 ||
+//     numMonth < 1 ||
+//     numMonth > 12
+//   ) {
+//     return {
+//       props: { hasError: true },
+//       // notFound: true,
+//       // redirect: {
+//       //   destination: '/error'
+//       // }
+//     };
+//   }
+
+//   const filteredEvents = await getFilteredEvents({
+//     year: numYear,
+//     month: numMonth,
+//   });
+
+//   return {
+//     props: {
+//       events: filteredEvents,
+//       date: {
+//         year: numYear,
+//         month: numMonth,
+//       },
+//     },
+//   };
+// }
+
+export default FilteredEventsPage
